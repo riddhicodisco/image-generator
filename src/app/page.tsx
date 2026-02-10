@@ -11,7 +11,8 @@ export default function Home() {
   const [preview, setPreview] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
-  const [zipUrl, setZipUrl] = useState<string | null>(null);
+  const [sessionId, setSessionId] = useState<string | null>(null);
+  const [generatedImages, setGeneratedImages] = useState<{ id: number; shipping: number }[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -25,6 +26,8 @@ export default function Home() {
       reader.readAsDataURL(file);
       setError(null);
       setIsComplete(false);
+      setGeneratedImages([]);
+      setSessionId(null);
     }
   };
 
@@ -37,6 +40,8 @@ export default function Home() {
     setIsGenerating(true);
     setError(null);
     setIsComplete(false);
+    setGeneratedImages([]);
+    setSessionId(null);
 
     const formData = new FormData();
     formData.append('image', image);
@@ -53,9 +58,9 @@ export default function Home() {
         throw new Error(data.error || 'Generation failed');
       }
 
-      const blob = await response.blob();
-      const url = window.URL.createObjectURL(blob);
-      setZipUrl(url);
+      const data = await response.json();
+      setSessionId(data.sessionId);
+      setGeneratedImages(data.images);
       setIsComplete(true);
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred.');
@@ -64,14 +69,25 @@ export default function Home() {
     }
   };
 
-  const handleDownload = () => {
-    if (zipUrl) {
+  const handleDownloadSingleImage = async (imgId: number) => {
+    if (!sessionId) return;
+
+    try {
+      const url = `/api/image/${sessionId}/${imgId}`;
+      const response = await fetch(url);
+      if (!response.ok) throw new Error('Download failed');
+
+      const blob = await response.blob();
+      const downloadUrl = window.URL.createObjectURL(blob);
       const a = document.createElement('a');
-      a.href = zipUrl;
-      a.download = `marketplace-images-${selectedCategory}.zip`;
+      a.href = downloadUrl;
+      a.download = `variation-${imgId}.png`;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch (err) {
+      console.error('Download error:', err);
     }
   };
 
@@ -190,8 +206,8 @@ export default function Home() {
                     onClick={handleGenerate}
                     disabled={isGenerating || !image}
                     className={`w-full flex items-center justify-center py-4 px-6 border border-transparent rounded-lg shadow-sm text-lg font-bold text-white transition-all ${isGenerating || !image
-                        ? 'bg-slate-300 cursor-not-allowed'
-                        : 'bg-indigo-600 hover:bg-indigo-700 active:transform active:scale-95'
+                      ? 'bg-slate-300 cursor-not-allowed'
+                      : 'bg-indigo-600 hover:bg-indigo-700 active:transform active:scale-95'
                       }`}
                   >
                     {isGenerating ? (
@@ -209,16 +225,10 @@ export default function Home() {
                       <CheckCircle2 className="flex-shrink-0 w-6 h-6 mr-3 text-green-600" />
                       <span className="text-lg font-bold">Successfully generated 57 images!</span>
                     </div>
+
                     <button
-                      onClick={handleDownload}
-                      className="w-full flex items-center justify-center py-4 px-6 border border-transparent rounded-lg shadow-sm text-lg font-bold text-white bg-green-600 hover:bg-green-700 active:transform active:scale-95 transition-all"
-                    >
-                      <Download className="-ml-1 mr-3 h-6 w-6" />
-                      Download ZIP File
-                    </button>
-                    <button
-                      onClick={() => { setIsComplete(false); setZipUrl(null); }}
-                      className="w-full text-sm text-slate-500 hover:text-slate-700 font-medium transition-colors"
+                      onClick={() => { setIsComplete(false); setGeneratedImages([]); }}
+                      className="w-full text-sm text-slate-500 hover:text-slate-700 font-medium transition-colors mb-4"
                     >
                       Start Over
                     </button>
@@ -228,6 +238,49 @@ export default function Home() {
             </div>
           </div>
         </div>
+
+        {/* Generated Images Grid */}
+        <AnimatePresence>
+          {isComplete && generatedImages.length > 0 && (
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mt-12"
+            >
+              <h2 className="text-2xl font-bold text-slate-900 mb-6">Generated Variations</h2>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+                {generatedImages.map((img) => (
+                  <motion.div
+                    key={img.id}
+                    whileHover={{ y: -5 }}
+                    className="bg-white rounded-xl shadow-md overflow-hidden border border-slate-200 group"
+                  >
+                    <div className="aspect-square relative overflow-hidden bg-slate-100">
+                      <img
+                        src={`/api/image/${sessionId}/${img.id}`}
+                        alt={`Variation ${img.id}`}
+                        className="w-full h-full object-contain"
+                        loading="lazy"
+                      />
+                      <div className="absolute top-2 right-2 bg-indigo-600 text-white px-3 py-1 rounded-full text-sm font-bold shadow-lg">
+                        Shipping: ₹{img.shipping}
+                      </div>
+                    </div>
+                    <div className="p-4">
+                      <button
+                        onClick={() => handleDownloadSingleImage(img.id)}
+                        className="w-full flex items-center justify-center py-2 px-4 border border-transparent rounded-lg shadow-sm text-sm font-bold text-white bg-indigo-600 hover:bg-indigo-700 transition-all"
+                      >
+                        <Download className="mr-2 h-4 w-4" />
+                        Download Image
+                      </button>
+                    </div>
+                  </motion.div>
+                ))}
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Info Section */}
         <div className="mt-12 grid grid-cols-1 gap-6 sm:grid-cols-3">

@@ -5,6 +5,7 @@ import fs from 'fs';
 import archiver from 'archiver';
 import { templates } from '@/lib/templates';
 import { generateSingleImage } from '@/lib/imageProcessor';
+import { CATEGORIES } from '@/lib/constants';
 
 export const maxDuration = 300; // 5 minutes for generation
 
@@ -30,36 +31,31 @@ export async function POST(req: NextRequest) {
     fs.writeFileSync(inputPath, buffer);
 
     // Generate 57 images
+    const variations = [];
+    const category = CATEGORIES.find(c => c.id === categoryId);
+    const minShipping = category?.shippingRange[0] || 40;
+    const maxShipping = category?.shippingRange[1] || 100;
+
     for (const template of templates) {
-      const outputPath = path.join(outputDir, `image_${template.id}.png`);
-      await generateSingleImage(template, inputPath, categoryId, outputPath);
+      const imageBuffer = await generateSingleImage(template, inputPath, categoryId);
+      const shippingCharge = minShipping + (template.id % (maxShipping - minShipping + 1));
+
+      const variationId = template.id;
+      const variationPath = path.join(outputDir, `${variationId}.png`);
+      fs.writeFileSync(variationPath, imageBuffer);
+
+      variations.push({
+        id: variationId,
+        shipping: shippingCharge,
+      });
     }
 
-    // Create ZIP
-    const zipPath = path.join(tempDir, 'results.zip');
-    const output = fs.createWriteStream(zipPath);
-    const archive = archiver('zip', { zlib: { level: 9 } });
+    // Cleanup input image, but keep outputDir for serving
+    fs.rmSync(inputPath, { force: true });
 
-    const zipPromise = new Promise<void>((resolve, reject) => {
-      output.on('close', resolve);
-      archive.on('error', reject);
-    });
-
-    archive.pipe(output);
-    archive.directory(outputDir, false);
-    await archive.finalize();
-    await zipPromise;
-
-    const zipBuffer = fs.readFileSync(zipPath);
-
-    // Cleanup
-    fs.rmSync(tempDir, { recursive: true, force: true });
-
-    return new Response(zipBuffer, {
-      headers: {
-        'Content-Type': 'application/zip',
-        'Content-Disposition': `attachment; filename="generated-images-${categoryId}.zip"`,
-      },
+    return NextResponse.json({
+      sessionId,
+      images: variations
     });
   } catch (error: any) {
     console.error('Generation error:', error);

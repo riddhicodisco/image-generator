@@ -8,8 +8,7 @@ export async function generateSingleImage(
   template: Template,
   productImagePath: string,
   categoryId: string,
-  outputPath: string
-) {
+): Promise<Buffer> {
   const category = CATEGORIES.find(c => c.id === categoryId);
   const minShipping = category?.shippingRange[0] || 40;
   const maxShipping = category?.shippingRange[1] || 100;
@@ -66,20 +65,8 @@ export async function generateSingleImage(
       const sMeta = await stickerImg.metadata();
       const sWidth = Math.round((sMeta.width || 1) * sticker.scale);
 
+      // Process other sticker types normally
       let stickerBuffer = await stickerImg.resize(sWidth).toBuffer();
-
-      // If it's a shipping badge, we need to add text on top
-      if (sticker.type === 'shipping-badge') {
-        const badgeMeta = await sharp(stickerBuffer).metadata();
-        const textSvg = `
-          <svg width="${badgeMeta.width}" height="${badgeMeta.height}">
-            <text x="50%" y="55%" font-family="Arial" font-size="24" font-weight="bold" fill="white" text-anchor="middle" dominant-baseline="middle">₹ ${shippingCharge}</text>
-          </svg>
-        `;
-        stickerBuffer = await sharp(stickerBuffer)
-          .composite([{ input: Buffer.from(textSvg), top: 0, left: 0 }])
-          .toBuffer();
-      }
 
       layers.push({
         input: stickerBuffer,
@@ -89,5 +76,5 @@ export async function generateSingleImage(
     }
   }
 
-  await canvas.composite(layers).toFile(outputPath);
+  return await canvas.composite(layers).png().toBuffer();
 }

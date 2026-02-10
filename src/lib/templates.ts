@@ -7,7 +7,7 @@ export interface Template {
   borderWidth: number;
   borderColor: string;
   stickers: {
-    type: 'free-delivery' | 'low-shipping' | 'shipping-badge';
+    type: 'free-delivery' | 'low-shipping';
     position: { x: number; y: number };
     scale: number;
   }[];
@@ -37,17 +37,9 @@ export const templates: Template[] = Array.from({ length: 57 }, (_, i) => {
 
   if (stickerCount >= 1) {
     stickers.push({
-      type: i % 3 === 0 ? 'free-delivery' : (i % 3 === 1 ? 'low-shipping' : 'shipping-badge'),
+      type: i % 2 === 0 ? 'free-delivery' : 'low-shipping',
       position: { x: 50, y: 50 },
       scale: 0.5,
-    });
-  }
-
-  if (stickerCount === 2) {
-    stickers.push({
-      type: 'shipping-badge',
-      position: { x: canvasSize.width - 250, y: canvasSize.height - 120 },
-      scale: 0.4,
     });
   }
 
