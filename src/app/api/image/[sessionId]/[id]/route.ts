@@ -22,8 +22,8 @@ export async function GET(
         'Cache-Control': 'public, max-age=3600, must-revalidate',
       },
     });
-  } catch (error: any) {
-    console.error('Image serving error:', error);
-    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  } catch (error: unknown) {
+    console.error("Image fetch error:", error);
+    return new NextResponse("Error fetching image", { status: 500 });
   }
 }
